@@ -1,0 +1,40 @@
+model:
+  name: neural_styler
+  ver: v1
+  solver: v1
+  style_encoder: 'efficientnet-b0'
+  k: 16
+
+train:
+  start_epoch: 0
+  end_epoch: 32
+  optimizer:
+    mode: 'adam'
+    adam:
+      lr: 3e-4
+      betas:
+        - 0.9
+        - 0.999
+  scheduler:
+    mode: 'StepLR'
+  check_val_every_n_epoch: 1   # validate & save model every n epoch
+
+test:
+  root: '/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/test_data_ours/1'
+
+data:
+  name: 'coco'
+  root: '/mnt/cfs/shanhai/lihaoran/project/code/color/data/coco/coco2017/'
+  batch_size: 64
+  num_workers: 32
+  size: 256
+  lut_root: '/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/cube_repo/lut2'
+
+saver:  # save model ckpt, training state
+  monitor_keys:
+    # monitoring_key-criterion (l for low,h for high)
+    - 'val/losses/total_loss-l'  # low total loss is good
+  save_every_n_epoch: 10   # checkpoint auto save interval
+
+criterion:
+  lambda_consistency: 10
