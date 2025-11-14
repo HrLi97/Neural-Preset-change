@@ -28,7 +28,7 @@ load:
                     # if false, load only network parameters
   
 logger: # print & save log / tensorboard & wandb logging
-  use_wandb: true
+  use_wandb: False
   log_every_n_steps: 50
 
 train:
