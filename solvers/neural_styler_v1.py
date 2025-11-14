@@ -47,8 +47,87 @@ class Solver(pl.LightningModule):
         y_j, y_i = torch.split(stacked_result, [img_i.shape[0], img_j.shape[0]], dim=0)
 
         return img_i, img_j, z_i, z_j, y_i, y_j
+    
+    # TODO - 换成lab之后的损失需要稍微改变
 
     def _compute_losses(self, z_i, z_j, y_i, y_j, img_i, img_j):
+        """Compute all losses for the model outputs."""
+        # 重建损失 - 输出和输入 
+        # 连续性损失 - 内容图的一致性
+        # 这里z_i和z_j是内容图，y_i和y_j是风格迁移后的结果图
+        # 更多损失 - 对比损失，
+        consistency_loss = self.l2(z_i, z_j)
+        # consistency_loss = self.l2(z_i[:, 0], z_j[:, 0])
+        
+        # 给颜色更多的权重
+        def weighted_lab_l1(pred, target, w_L=1.0, w_ab=2.0):
+            loss_L = self.l1(pred[:, 0], target[:, 0])       # L 通道
+            loss_a = self.l1(pred[:, 1], target[:, 1])       # a 通道
+            loss_b = self.l1(pred[:, 2], target[:, 2])       # b 通道
+            return w_L * loss_L + w_ab * (loss_a + loss_b)
+        
+        recon_i = weighted_lab_l1(y_i, img_i, w_L=1, w_ab=2)
+        recon_j = weighted_lab_l1(y_j, img_j, w_L=1, w_ab=2)
+        reconstruction_loss = recon_i + recon_j
+        
+        def moment_loss(pred_lab, target_lab, channels=[0, 1, 2]): 
+            loss = 0.0
+            for c in channels:
+                pred_mean = pred_lab[:, c].mean(dim=[1, 2])    
+                pred_std  = pred_lab[:, c].std(dim=[1, 2])    
+                targ_mean = target_lab[:, c].mean(dim=[1, 2])
+                targ_std  = target_lab[:, c].std(dim=[1, 2])
+                loss += self.l1(pred_mean, targ_mean) + self.l1(pred_std, targ_std)
+            return loss
+        
+        # y_i 是 img_i 用 img_j 风格迁移的结果 → 应匹配 img_j 
+        style_moment_loss_i = moment_loss(y_i, img_j, channels=[0, 1, 2])
+        style_moment_loss_j = moment_loss(y_j, img_i, channels=[0, 1, 2])
+        moment_loss_total = style_moment_loss_i + style_moment_loss_j
+        
+        # print(consistency_loss.item(), "1",reconstruction_loss.item(), "2",moment_loss_total.item())
+        # print(123321)
+        # 0.9981240034103394 1 16.541236877441406 2 15.138587951660156
+        
+        total_loss = reconstruction_loss + self.cfg.criterion.lambda_consistency * consistency_loss + moment_loss_total
+        
+        return {
+            'consistency_loss': consistency_loss,
+            'reconstruction_loss': reconstruction_loss,
+            'moment_loss': moment_loss_total,
+            'total_loss': total_loss
+        }
+        
+    # 将l1损失在lab上进行区分 更在乎颜色
+    def _compute_losses_forLAB(self, z_i, z_j, y_i, y_j, img_i, img_j):
+        """Compute all losses for the model outputs."""
+        # 重建损失 - 输出和输入 
+        # 连续性损失 - 内容图的一致性
+        # 这里z_i和z_j是内容图，y_i和y_j是风格迁移后的结果图
+        # 更多损失 - 对比损失，
+        consistency_loss = self.l2(z_i, z_j)
+        # consistency_loss = self.l2(z_i[:, 0], z_j[:, 0])
+        
+        # 给颜色更多的权重
+        def weighted_lab_l1(pred, target, w_L=1.0, w_ab=2.0):
+            loss_L = self.l1(pred[:, 0], target[:, 0])       # L 通道
+            loss_a = self.l1(pred[:, 1], target[:, 1])       # a 通道
+            loss_b = self.l1(pred[:, 2], target[:, 2])       # b 通道
+            return w_L * loss_L + w_ab * (loss_a + loss_b)
+        
+        recon_i = weighted_lab_l1(y_i, img_i, w_L=1, w_ab=2)
+        recon_j = weighted_lab_l1(y_j, img_j, w_L=1, w_ab=2)
+        reconstruction_loss = recon_i + recon_j
+
+        total_loss = reconstruction_loss + self.cfg.criterion.lambda_consistency * consistency_loss
+        
+        return {
+            'consistency_loss': consistency_loss,
+            'reconstruction_loss': reconstruction_loss,
+            'total_loss': total_loss
+        }
+        
+    def _compute_losses_yuan(self, z_i, z_j, y_i, y_j, img_i, img_j):
         """Compute all losses for the model outputs."""
         # 重建损失 - 输出和输入 
         # 连续性损失 - 内容图的一致性

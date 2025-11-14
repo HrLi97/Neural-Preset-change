@@ -61,9 +61,9 @@ def tensor_to_numpy(tensor):
 
 def main():
     ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/best.ckpt"
-    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-未调色-frame100.png"
-    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色-0.png"
-    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-P1-未调色frame100_调色0_ours.png"
+    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-frame0_ours.png"
+    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色_8bit.png"
+    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-frame0_ours_2.png"
 
     # === 配置加载 ===
     project_root = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main"

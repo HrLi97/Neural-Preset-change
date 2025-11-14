@@ -8,6 +8,9 @@ import torchvision.transforms as T
 from torch.utils.data import Dataset,DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import sys
+import os
+import functools
+sys.path.append("/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/datasets")
 from rgb2lab import srgb_tensor_to_normalized_lab
 
 # class COCO(Dataset):
@@ -78,11 +81,18 @@ class COCO(Dataset):
         self.data += glob.glob(osp.join(self.root, split, '*.jpg'))
 
         # prepare LUTs
-        self.lut = glob.glob(self.lut_root + '/*.cube')
-        self.lut = [load_cube_file(lut) for lut in self.lut]
+        # self.lut = glob.glob(self.lut_root + '/*.cube')
+        # self.lut = [load_cube_file(lut) for lut in self.lut]
+        
+        # prepare LUTs path
+        self.lut_paths = glob.glob(os.path.join(self.lut_root, "*.cube"))
+        self.load_lut = functools.lru_cache(maxsize=48)(self._load_lut_uncached)
 
     def __len__(self):
         return len(self.data)
+    
+    def _load_lut_uncached(self, lut_path):
+        return load_cube_file(lut_path)
 
     def __getitem__(self, idx):
         # return two type of augmented image, img_i & img_j
@@ -90,12 +100,16 @@ class COCO(Dataset):
         img = Image.open(self.data[idx]).convert('RGB')
         img = img.resize((self.cfg.data.size,self.cfg.data.size),Image.BICUBIC)
 
-        # get two random LUTs
-        random_lut_idx = np.random.randint(0,len(self.lut),2)
+        # # get two random LUTs -yuan
+        # random_lut_idx = np.random.randint(0,len(self.lut),2)
+        # lut_i = self.lut[random_lut_idx[0]]
+        # lut_j = self.lut[random_lut_idx[1]]
         
-        lut_i = self.lut[random_lut_idx[0]]
-        lut_j = self.lut[random_lut_idx[1]]
-
+        # load LUTS
+        lut_path_i, lut_path_j = np.random.choice(self.lut_paths, size=2, replace=True)
+        lut_i = self.load_lut(lut_path_i)
+        lut_j = self.load_lut(lut_path_j)
+        
         # apply LUTs
         img_i = img.filter(lut_i)
         img_j = img.filter(lut_j)
