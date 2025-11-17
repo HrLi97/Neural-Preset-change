@@ -13,58 +13,55 @@ import functools
 sys.path.append("/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/datasets")
 from rgb2lab import srgb_tensor_to_normalized_lab
 
-# class COCO(Dataset):
-#     def __init__(self,cfg,split,transform=None):
-#         self.cfg = cfg
-#         self.root = cfg.data.root
-#         self.split = split  # train / valid / test
-#         self.lut_root = cfg.data.lut_root
+class COCO_yuan(Dataset):
+    def __init__(self,cfg,split,transform=None):
+        self.cfg = cfg
+        self.root = cfg.data.root
+        self.split = split  # train / valid / test
+        self.lut_root = cfg.data.lut_root
 
-#         self.transform = transform
-#         self.totensor = T.ToTensor()
+        self.transform = transform
+        self.totensor = T.ToTensor()
         
-#         # prepare data list
-#         self.data = []
-#         self.data += glob.glob(osp.join(self.root, split, '*.jpg'))
+        # prepare data list
+        self.data = []
+        self.data += glob.glob(osp.join(self.root, split, '*.jpg'))
 
-#         # prepare LUTs
-#         self.lut = glob.glob(self.lut_root + '/*.cube')
-#         self.lut = [load_cube_file(lut) for lut in self.lut]
+        # prepare LUTs
+        self.lut = glob.glob(self.lut_root + '/*.cube')
+        self.lut = [load_cube_file(lut) for lut in self.lut]
 
-#     def __len__(self):
-#         return len(self.data)
+    def __len__(self):
+        return len(self.data)
 
-#     def __getitem__(self, idx):
-#         # return two type of augmented image, img_i & img_j
-#         item_dict = {}
-#         img = Image.open(self.data[idx]).convert('RGB')
-#         img = img.resize((self.cfg.data.size,self.cfg.data.size),Image.BICUBIC)
+    def __getitem__(self, idx):
+        # return two type of augmented image, img_i & img_j
+        item_dict = {}
+        img = Image.open(self.data[idx]).convert('RGB')
+        img = img.resize((self.cfg.data.size,self.cfg.data.size),Image.BICUBIC)
 
-#         # get two random LUTs
-#         random_lut_idx = np.random.randint(0,len(self.lut),2)
+        # get two random LUTs
+        random_lut_idx = np.random.randint(0,len(self.lut),2)
         
-#         lut_i = self.lut[random_lut_idx[0]]
-#         lut_j = self.lut[random_lut_idx[1]]
+        lut_i = self.lut[random_lut_idx[0]]
+        lut_j = self.lut[random_lut_idx[1]]
 
-#         # apply LUTs
-#         img_i = img.filter(lut_i)
-#         img_j = img.filter(lut_j)
+        # apply LUTs
+        img_i = img.filter(lut_i)
+        img_j = img.filter(lut_j)
         
-#         if self.transform is not None:
-#             img_i = self.transform(img_i)
-#             img_j = self.transform(img_j)
+        if self.transform is not None:
+            img_i = self.transform(img_i)
+            img_j = self.transform(img_j)
 
-#         img_i = self.totensor(img_i)
-#         img_j = self.totensor(img_j)
-#         # print(img_i,"img_iimg_i")
+        img_i = self.totensor(img_i)
+        img_j = self.totensor(img_j)
+        # print(img_i,"img_iimg_i")
         
-#         item_dict['img_i'] = img_i
-#         item_dict['img_j'] = img_j
+        item_dict['img_i'] = img_i
+        item_dict['img_j'] = img_j
         
-#         print(img_i,"img_j_labimg_j_labimg_j_lab")
-
-#         return item_dict
-    
+        return item_dict
     
 class COCO(Dataset):
     def __init__(self,cfg,split,transform=None):

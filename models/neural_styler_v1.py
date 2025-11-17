@@ -20,7 +20,7 @@ class neural_styler(nn.Module):
         tmp_matrix = self.style_encoder(style)  # B x (k^2)*2
         
         # split tmp_matrix into r and d (B x k x k matrix each)
-        r = tmp_matrix[:, :self.k**2].reshape(-1, self.k, self.k)
+        r = tmp_matrix[:, :self.k**2].reshape(-1, self.k, self.k) # 16 * 16
         d = tmp_matrix[:, self.k**2:].reshape(-1, self.k, self.k)
 
         return r, d
