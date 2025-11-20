@@ -7,32 +7,36 @@ from pytorch_lightning.utilities.rank_zero import rank_zero_only
 
 sys.path.insert(1,os.path.abspath('..'))
 sys.path.insert(1,os.path.abspath('../../'))
+sys.path.append("/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main")
 from utils.setup import init_path_and_expname,get_callbacks,get_logger,get_trainer_args
 from datasets.unified_loader import get_loader
 from criterions.criterion import MasterCriterion
 import pytorch_lightning as pl
 
+# if __name__ == '__main__':
+#     # import default config file
+#     cfg = OmegaConf.merge(OmegaConf.load(f'../configs/default.yaml'),OmegaConf.load('../configs/env.yaml'))
+#     # read from command line
+#     cfg_cmd = OmegaConf.from_cli()
+#     # merge model specific config file
+#     if "model" in cfg_cmd  and 'name' in cfg_cmd.model:
+#         cfg = OmegaConf.merge(cfg,OmegaConf.load(f'../configs/{cfg_cmd.model.name}.yaml'))
+#     else:
+#         cfg = OmegaConf.merge(cfg,OmegaConf.load(f'../configs/{cfg.model.name}.yaml'))
+#     # merge cfg from command line
+#     cfg = OmegaConf.merge(cfg,cfg_cmd)
+    
 if __name__ == '__main__':
-    # import default config file
-    cfg = OmegaConf.merge(OmegaConf.load(f'../configs/default.yaml'),OmegaConf.load('../configs/env.yaml'))
-    # read from command line
+    cfg = OmegaConf.load('/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/configs/all.yaml')
     cfg_cmd = OmegaConf.from_cli()
-    # merge model specific config file
-    if "model" in cfg_cmd  and 'name' in cfg_cmd.model:
-        cfg = OmegaConf.merge(cfg,OmegaConf.load(f'../configs/{cfg_cmd.model.name}.yaml'))
-    else:
-        cfg = OmegaConf.merge(cfg,OmegaConf.load(f'../configs/{cfg.model.name}.yaml'))
-    # merge cfg from command line
-    cfg = OmegaConf.merge(cfg,cfg_cmd)
-
-    # Path and exp_name configuration
+    cfg = OmegaConf.merge(cfg, cfg_cmd)
     init_path_and_expname(cfg)      # This function is only done in master process
     pl.seed_everything(cfg.seed)
 
     # Dataloader
     dataloader = {
         'train': get_loader(cfg,'train') if cfg.mode == 'train' else None,
-        'valid': get_loader(cfg,'valid2017') if cfg.mode == 'train' else None,
+        'valid': get_loader(cfg,'valid') if cfg.mode == 'train' else None,
         'test' : get_loader(cfg,'test') if cfg.mode == 'test' else None
     }
     

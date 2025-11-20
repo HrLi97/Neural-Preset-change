@@ -1,13 +1,15 @@
 model:
   name: neural_styler
   ver: v1
-  solver: v1
+  solver: v3
   style_encoder: 'efficientnet-b0'
   k: 16
 
 train:
+  stage: "full_train" # full-train pretrain
+  pretrain_ckpt: /mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/yuan_data/251119_182127_neural_styler_v1/epoch=0029.ckpt
   start_epoch: 0
-  end_epoch: 32
+  end_epoch: 50
   optimizer:
     mode: 'adam'
     adam:
@@ -17,7 +19,7 @@ train:
         - 0.999
   scheduler:
     mode: 'StepLR'
-  check_val_every_n_epoch: 1   # validate & save model every n epoch
+  check_val_every_n_epoch: 1
 
 test:
   root: '/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/test_data_ours/1'
@@ -38,3 +40,7 @@ saver:  # save model ckpt, training state
 
 criterion:
   lambda_consistency: 10
+  lambda_moment: 1.0
+  lab_ab_weight: 2.0
+  lambda_cov: 0.5
+  infor_loss: 1

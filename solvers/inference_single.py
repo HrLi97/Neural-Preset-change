@@ -25,7 +25,6 @@ def load_image(path, size=512):
     ])
     return transform(img).unsqueeze(0)  # add batch dim
 
-
 def load_image_keep_ratio_content(path):
     img = Image.open(path).convert('RGB')
     orig_w, orig_h = img.size
@@ -61,10 +60,10 @@ def tensor_to_numpy(tensor):
     return img
 
 def main():
-    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/use_lab/251114_160737_neural_styler_v1/last.ckpt"
-    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-未调色_8bit.png"
-    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色_8bit.png"
-    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-frame0_ours_lab.png"
+    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/yuan_b128_e100/251117_221052_neural_styler_v1/last.ckpt"
+    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/content/frame_000000.png"
+    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/style/frame_000000.png"
+    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-未调色_16bit_out_yuan.png"
 
     # === 配置加载 ===
     project_root = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main"
@@ -105,10 +104,6 @@ def main():
         cfg=cfg
     )
     net = solver.net.eval().cuda()
-
-    # test_size = cfg.get("test_size", 512)
-    # img_i = load_image(content_path, size=test_size).cuda()
-    # img_j = load_image(style_path, size=test_size).cuda()
 
     img_i_tensor, orig_size_i = load_image_keep_ratio_content(content_path)
     img_j_tensor, orig_size_j = load_image_keep_ratio(style_path, max_size=768)

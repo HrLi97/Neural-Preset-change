@@ -20,7 +20,7 @@ path:
   # these params will be auto-initialized through utils.common.init_path function
   log_path: ~     # tensorboard or wandb
   ckpt_path: ~    # model & training state checkpoint
-  result_path: ~  # visualization or else...
+  result_path: "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/validation_vis/"
 
 load:
   ckpt_path: ~      # '../ckpts/220314_1317/refactor_testing_best_MAE_illum.pt'
@@ -29,12 +29,12 @@ load:
   
 logger: # print & save log / tensorboard & wandb logging
   use_wandb: False
-  log_every_n_steps: 50
+  log_every_n_steps: 5
 
 train:
   optimizer:
     adam:
-      lr: 1e-4
+      lr: 1e-5
       betas:
         - 0.9
         - 0.999
@@ -44,7 +44,7 @@ train:
       gamma: 0.1
       verbose: true
     CosineAnnealingLR:
-      T_max: 10
+      T_max: 50
       eta_min: 1e-6
       verbose: true
     ReduceLROnPlateau:

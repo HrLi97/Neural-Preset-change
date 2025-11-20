@@ -135,10 +135,10 @@ def process_image_folder_with_style(
     print(f"✅ All results saved to: {output_dir}")
 
 def main():
-    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/best.ckpt"
-    content_img_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/content/img2" 
-    style_img_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/content/img2"     
-    output_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/image_style_transfer2"
+    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/yuan_b128_e100/251118_112445_neural_styler_v1/last.ckpt"
+    content_img_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/content" 
+    style_img_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/style"     
+    output_dir = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1117/yuan_b128_e100_1119_1v1"
 
     process_image_folder_with_style(
         ckpt_path=ckpt_path,

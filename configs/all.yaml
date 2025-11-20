@@ -1,0 +1,108 @@
+# Unified config: neural_styler_full.yaml
+
+# --- Project & Experiment ---
+project_name: neural_preset
+exp_name: 'neural_preset_baseline'
+
+# --- Environment ---
+seed: 52
+mode: train  # [train / test]
+devices: 1   # integer or list; N of GPU if using GPU
+random_seed: ~
+servername: 'full-train-bias'  # from env.yaml
+
+# --- Paths ---
+path:
+  time_format: '%y%m%d_%H%M%S'
+  date_time_model: '950112_hhmmss_modelname'
+  log_root: '../logs'
+  ckpt_root: '../ckps'
+  result_root: '../results'
+  log_path: ~
+  ckpt_path: ~
+  result_path: "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/validation_vis/111/"
+
+# --- Checkpoint Loading ---
+load:
+  ckpt_path: ~
+  load_state: true  # if true, load everything; if false, only network weights
+
+# --- Logging ---
+logger:
+  use_wandb: False
+  log_every_n_steps: 5
+
+# --- Model ---
+model:
+  name: neural_styler
+  ver: v1
+  solver: v3
+  style_encoder: 'efficientnet-b0'
+  k: 16
+
+# --- Training ---
+train:
+  stage: "full_train"  # full_train or pretrain
+  pretrain_ckpt: 
+  start_epoch: 0
+  end_epoch: 50
+  optimizer:
+    mode: 'adam'
+    adam:
+      lr: 1e-4
+      betas: [0.9, 0.999]
+  scheduler:
+    mode: 'StepLR'
+    StepLR:
+      step_size: 24
+      gamma: 0.1
+      verbose: true
+    CosineAnnealingLR:
+      T_max: 50
+      eta_min: 1e-7
+      verbose: true
+    ReduceLROnPlateau:
+      mode: 'min'
+      factor: 0.1
+      patience: 10
+      verbose: true
+      threshold: 0.0001
+      threshold_mode: 'rel'
+      cooldown: 0
+      min_lr: 0
+      eps: 1e-08
+    monitor: 'train-total_loss_epoch'
+  check_val_every_n_epoch: 1
+
+# --- Testing ---
+test:
+  root: '/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/test_data_ours/1'
+
+# --- Data ---
+data:
+  name: 'coco'
+  root: '/mnt/cfs/shanhai/lihaoran/project/code/color/data/coco/coco2017/'
+  batch_size: 64
+  num_workers: 32
+  size: 256
+  lut_root: '/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/cube_repo/lut2'
+
+# --- Checkpoint Saving ---
+saver:
+  monitor_keys:
+    - 'val/losses/total_loss-l'  # low is good
+  save_every_n_epoch: 10
+
+# --- Loss / Criterion ---
+criterion:
+  l1_loss:
+    mod: 'l1_loss'
+    alpha: 1.0
+  cross_entropy:
+    mod: 'cross_entropy'
+    alpha: 1.0
+  lambda_consistency: 10
+  lambda_moment: 1.0
+  lab_ab_weight: 2.0
+  lambda_cov: 0.5
+  infor_loss: 1

@@ -7,6 +7,7 @@ import os
 import cv2
 from omegaconf import OmegaConf
 from utils.setup import get_optimizer, get_scheduler
+import torch.nn.functional as F
 
 class Solver(pl.LightningModule):
     """Neural Styler Solver using PyTorch Lightning.
@@ -33,6 +34,7 @@ class Solver(pl.LightningModule):
     def _process_batch(self, batch):
         """Process a batch of images and return model outputs."""
         img_i, img_j = batch["img_i"], batch["img_j"]
+        noise_i, noise_j = batch["noise_i"], batch["noise_j"]
 
         # Stack images for batch processing
         # 这是两个不同的链路进行训练
@@ -40,15 +42,120 @@ class Solver(pl.LightningModule):
         stacked_style = torch.cat([img_j, img_i], dim=0)
 
         # Forward pass
-        stacked_z, stacked_result = self.net(stacked_content,   )
+        stacked_z, stacked_result = self.net(stacked_content, stacked_style)
         # z_i z_j代表了内容图  i代表第一张图 j表示第二张图  相同图像，不同风格
         z_i, z_j = torch.split(stacked_z, [img_i.shape[0], img_j.shape[0]], dim=0)
         # y_j y_i代表了风格迁移后的结果图
         y_j, y_i = torch.split(stacked_result, [img_i.shape[0], img_j.shape[0]], dim=0)
+        
+        # 计算noise监督 还有真实的r矩阵 16*16的矩阵
+        with torch.no_grad():
+            r_gt_i, _ = self.net.get_r_and_d(noise_i)
+            r_gt_j, _ = self.net.get_r_and_d(noise_j)
+            r_pred_i, _ = self.net.get_r_and_d(img_j)  # img_j 是风格图 → r_pred_i
+            r_pred_j, _ = self.net.get_r_and_d(img_i)  # img_i 是风格图 → r_pred_j
 
-        return img_i, img_j, z_i, z_j, y_i, y_j
+        return img_i, img_j, z_i, z_j, y_i, y_j, r_gt_i, r_gt_j, r_pred_i, r_pred_j
 
-    def _compute_losses(self, z_i, z_j, y_i, y_j, img_i, img_j):
+     # TODO - 换成lab之后的损失需要稍微改变
+    # 将l1损失在lab上进行区分 更在乎颜色; 加上了统计量的损失
+    def _compute_losses_moment(self, z_i, z_j, y_i, y_j, img_i, img_j):
+        """Compute all losses for the model outputs."""
+        consistency_loss = self.l2(z_i, z_j)
+        # consistency_loss = self.l2(z_i[:, 0], z_j[:, 0])
+    
+        # 给颜色更多的权重
+        def weighted_lab_l1(pred, target, w_L=1.0, w_ab=2.0):
+            loss_L = self.l1(pred[:, 0], target[:, 0])       # L 通道
+            loss_a = self.l1(pred[:, 1], target[:, 1])       # a 通道
+            loss_b = self.l1(pred[:, 2], target[:, 2])       # b 通道
+            return w_L * loss_L + w_ab * (loss_a + loss_b)
+        
+        recon_i = weighted_lab_l1(y_i, img_i, w_L=1, w_ab=2)
+        recon_j = weighted_lab_l1(y_j, img_j, w_L=1, w_ab=2)
+        reconstruction_loss = recon_i + recon_j
+        
+        def moment_loss(pred_lab, target_lab, channels=[0, 1, 2]): 
+            loss = 0.0
+            for c in channels:
+                pred_mean = pred_lab[:, c].mean(dim=[1, 2])
+                pred_std  = pred_lab[:, c].std(dim=[1, 2])
+                targ_mean = target_lab[:, c].mean(dim=[1, 2])
+                targ_std  = target_lab[:, c].std(dim=[1, 2])
+                loss += self.l1(pred_mean, targ_mean) + self.l1(pred_std, targ_std)
+            return loss
+        
+        # y_i 是 img_i 用 img_j 风格迁移的结果 → 应匹配 img_j  不给l施加约束
+        style_moment_loss_i = moment_loss(y_i, img_j, channels=[ 1, 2])
+        style_moment_loss_j = moment_loss(y_j, img_i, channels=[1, 2])
+        moment_loss_total = style_moment_loss_i + style_moment_loss_j
+        
+        total_loss = reconstruction_loss + self.cfg.criterion.lambda_consistency * consistency_loss + moment_loss_total
+        
+        return {
+            'consistency_loss': consistency_loss,
+            'reconstruction_loss': reconstruction_loss,
+            'moment_loss': moment_loss_total,
+            'total_loss': total_loss
+        }
+    
+    def info_nce_loss(self, anchor, positive, negatives, b, temperature=0.1):
+        """
+        anchor:      [B, D]  —— e.g., r_pred_i
+        positive:    [B, D]  —— e.g., r_gt_i
+        negatives:   [B, N, D] —— e.g., r_gt_j as one negative, so N=1
+        Returns: scalar loss
+        """
+        B = b
+        anchor = F.normalize(anchor, dim=1)          # [B, D]
+        positive = F.normalize(positive, dim=1)      # [B, D]
+        negatives = F.normalize(negatives, dim=2)    # [B, N, D]
+
+        # Positive similarity: [B]
+        pos_sim = torch.sum(anchor * positive, dim=1) / temperature  # [B]
+
+        # Negative similarities: [B, N]
+        neg_sim = torch.bmm(anchor.unsqueeze(1), negatives.transpose(1, 2)).squeeze(1) / temperature  # [B, N]
+        logits = torch.cat([pos_sim.unsqueeze(1), neg_sim], dim=1)  # [B, 1+N]
+        labels = torch.zeros(B, dtype=torch.long, device=anchor.device)
+
+        # InfoNCE loss
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+    # 将l1损失在lab上进行区分 更在乎颜色
+    def _compute_losses(self, z_i, z_j, y_i, y_j, img_i, img_j, r_gt_i, r_gt_j, r_pred_i, r_pred_j):
+        """Compute all losses for the model outputs."""
+        consistency_loss = self.l2(z_i[:, 0], z_j[:, 0])
+
+        # 给颜色更多的权重
+        def weighted_lab_l1(pred, target, w_L=1.0, w_ab=2.0):
+            loss_L = self.l1(pred[:, 0], target[:, 0])       # L 通道
+            loss_a = self.l1(pred[:, 1], target[:, 1])       # a 通道
+            loss_b = self.l1(pred[:, 2], target[:, 2])       # b 通道
+            return w_L * loss_L + w_ab * (loss_a + loss_b)
+        
+        recon_i = weighted_lab_l1(y_i, img_i, w_L=1, w_ab=2)
+        recon_j = weighted_lab_l1(y_j, img_j, w_L=1, w_ab=2)
+        reconstruction_loss = recon_i + recon_j
+
+        # === 风格矩阵 r 的监督损失 ===
+        # 进行InforNce损失
+        # style_sup_loss = self.l1(r_pred_i, r_gt_i) + self.l1(r_pred_j, r_gt_j)
+        b = r_pred_i.shape[0]
+        info_i = self.info_nce_loss(r_pred_i.view(b,-1), r_gt_i.view(b,-1), r_gt_j.view(b,-1).unsqueeze(1),b)
+        info_j = self.info_nce_loss(r_pred_j.view(b,-1), r_gt_j.view(b,-1), r_gt_i.view(b,-1).unsqueeze(1),b)
+        info_loss = info_i + info_j
+        
+        total_loss = reconstruction_loss + self.cfg.criterion.lambda_consistency * consistency_loss + self.cfg.criterion.infor_loss * info_loss
+        
+        return {
+            'consistency_loss': consistency_loss,
+            'reconstruction_loss': reconstruction_loss,
+            'total_loss': total_loss
+        }
+
+    def _compute_losses_yua(self, z_i, z_j, y_i, y_j, img_i, img_j):
         """Compute all losses for the model outputs."""
         # 重建损失 - 输出和输入 
         # 连续性损失 - 内容图的一致性
@@ -63,6 +170,7 @@ class Solver(pl.LightningModule):
             'reconstruction_loss': reconstruction_loss,
             'total_loss': total_loss
         }
+    
     
     def _log_metrics(self, losses, phase):
         """Log metrics to wandb and progress bar."""
@@ -89,11 +197,11 @@ class Solver(pl.LightningModule):
             prog_bar=True,
             rank_zero_only=True
         )
-    
+
     def training_step(self, batch, batch_idx):
         # Process batch and compute losses
-        img_i, img_j, z_i, z_j, y_i, y_j = self._process_batch(batch)
-        losses = self._compute_losses(z_i, z_j, y_i, y_j, img_i, img_j)
+        img_i, img_j, z_i, z_j, y_i, y_j, r_gt_i, r_gt_j, r_pred_i, r_pred_j = self._process_batch(batch)
+        losses = self._compute_losses(img_i, img_j, z_i, z_j, y_i, y_j, r_gt_i, r_gt_j, r_pred_i, r_pred_j)
         
         # Log metrics
         self._log_metrics(losses, 'train')

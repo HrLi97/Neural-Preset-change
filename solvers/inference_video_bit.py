@@ -121,16 +121,7 @@ def process_video_with_style(
     # for frame in frames:
     for i in range(frames.num_frame):
         frame = frames[i:i+1]
-    # offset=0
-    # while True:
-        # frames=video_info.load_data(offset=offset,max_num_frame=100)
         
-        # frames.crop([0,0,width,height])
-        
-        # if frames is None or frames.num_frame<1:
-            # break
-        # offset+=frames.num_frame
-        # frame.data = frame.data.unsqueeze(0)
         frame.to_device(device).to_nchw().try_norm()
         max_frame_1 = torch.max(frame.data)
         print(max_frame_1,"max_frame_1max_frame_1max_frame_1")
@@ -143,82 +134,18 @@ def process_video_with_style(
         print(styled.shape,"styledstyledstyled")
         max_frame = torch.max(styled)
         print(max_frame,"max_framemax_framemax_framemax_frame") 
-        
+
         video_data = VideoData(tensor=styled,format=frame.format,scale=frame.scale)
         video_data.try_denorm()
         TensorSaveVideo.videodata_to_stream(video_data,videoStreamWriterFfmpeg)
 
-    # for frame_idx, frame in enumerate(frames):
-    #     max_val = float(frame.max())
-    #     print(max_val,"max_valmax_valmax_valmax_val")
-    #     if max_val == 0:
-    #         norm_factor = 65535.0
-    #     elif max_val <= 1024:
-    #         norm_factor = 1023.0
-    #     else:
-    #         norm_factor = 65535.0
-    #     frame_float = frame.astype(np.float32) / norm_factor
-    #     content_tensor = torch.from_numpy(frame_float).permute(2, 0, 1).unsqueeze(0).to(device)
-
-    #     # Resize content
-    #     orig_h, orig_w = content_tensor.shape[-2:]
-    #     scale = min(max_size / orig_h, max_size / orig_w)
-    #     new_h = int(orig_h * scale) // 2 * 2
-    #     new_w = int(orig_w * scale) // 2 * 2
-    #     if (new_h, new_w) != (orig_h, orig_w):
-    #         from torch.nn.functional import interpolate
-    #         content_tensor = interpolate(content_tensor, size=(new_h, new_w), mode='bilinear', align_corners=False)
-
-    #     # Resize style
-    #     H, W = content_tensor.shape[-2:]
-    #     if style_tensor_full.shape[-2:] != (H, W):
-    #         style_tensor = interpolate(style_tensor_full, size=(H, W), mode='bilinear', align_corners=False)            
-    #     else:
-    #         style_tensor = style_tensor_full
-    #     style_tensor_full = style_tensor_full.to("cuda")
-
-    #     # Inference
-    #     with torch.no_grad():
-    #         _, styled = net(content_tensor, style_tensor)
-
-    #     video_data = VideoData(tensor=styled,format="NHWC",scale=2**16-1)
-    #     video_data.try_denorm()
-    #     TensorSaveVideo.videodata_to_stream(video_data,videoStreamWriterFfmpeg)
-        
-    #     # styled_np = styled.squeeze(0).cpu().numpy().transpose(1, 2, 0)
-    #     # # styled_uint16 = (styled_np * 65535.0).astype(np.uint16)
-    #     # styled_uint16 = np.clip(styled_np * 65535.0, 0, 65535).astype(np.uint16)
-    #     # style_bytes = np.ascontiguousarray(styled_uint16).tobytes()
-    #     # videoStreamWriterFfmpeg.Write(style_bytes)
-
-    # #     # Convert back to uint16 RGB (for 10-bit output)
-    # #     styled_np = styled.squeeze(0).cpu().numpy().transpose(1, 2, 0)  # [H, W, 3] in [0,1]
-    # #     styled_uint16 = (styled_np * 65535.0).astype(np.uint16)  # [H, W, 3], uint16
-
-    # #     frame_out = av.VideoFrame.from_ndarray(styled_uint16, format='rgb48le')
-    # #     output_stream.pix_fmt = 'yuv422p10le'
-    # #     frame_out = frame_out.reformat(width, height, output_stream.pix_fmt)
-
-    # #     # Encode and write
-    # #     for packet in output_stream.encode(frame_out):
-    # #         output_container.mux(packet)
-
-    # #     if (frame_idx + 1) % 10 == 0:
-    # #         print(f"Processed {frame_idx + 1}/{frame_count} frames")
-
-    # # # # Flush encoder
-    # # for packet in output_stream.encode():
-    # #     output_container.mux(packet)
-
-    # output_container.close()
     videoStreamWriterFfmpeg.Close()
     print(f"✅ Video saved to: {output_video_path}")
 
 def main():
-    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/251107_023648_neural_styler_v1/last.ckpt"
+    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/yuan_b128_e100/251117_221052_neural_styler_v1/last.ckpt"
     content_video_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-未调色.mov"
-    output_video_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色-ours_0_cpk_ours.mov"  # 保持 .mov 以兼容 ProRes
-
+    output_video_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色-ours_0_cpk_ours.mov"  
     # === 从内容视频中提取第一帧作为风格图 ===
     
     style_video_info = VideoInfoFfmpeg("/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色.mov")

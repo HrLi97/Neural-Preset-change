@@ -8,7 +8,6 @@ from omegaconf import OmegaConf
 import sys
 sys.path.insert(1,os.path.abspath('..'))
 sys.path.insert(1,os.path.abspath('../../'))
-# from utils.setup import init_path_and_expname,get_callbacks,get_logger,get_trainer_args
 import importlib
 sys.path.append("/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/solvers/")
 project_root = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main"
@@ -17,6 +16,30 @@ sys.path.append(os.path.join(project_root, "solvers"))
 from neural_styler_v1 import Solver  
 from datasets.rgb2lab import lab_tensor_to_srgb_image, srgb_tensor_to_normalized_lab
 
+def load_content_as_lab(path):
+    img = Image.open(path).convert('RGB')
+    orig_w, orig_h = img.size
+    new_w = orig_w - (orig_w % 2)
+    new_h = orig_h - (orig_h % 2)
+    if (new_w, new_h) != (orig_w, orig_h):
+        img = img.resize((new_w, new_h), Image.BICUBIC)
+    tensor = T.ToTensor()(img)  # [C, H, W]
+    lab = srgb_tensor_to_normalized_lab(tensor)
+    return lab.unsqueeze(0), (orig_h, orig_w)
+
+def load_style_as_lab(path, max_size=768):
+    img = Image.open(path).convert('RGB')
+    orig_w, orig_h = img.size
+    scale = min(max_size / orig_h, max_size / orig_w)
+    new_w = int(orig_w * scale)
+    new_h = int(orig_h * scale)
+    new_w = new_w - (new_w % 2)
+    new_h = new_h - (new_h % 2)
+    if (new_w, new_h) != (orig_w, orig_h):
+        img = img.resize((new_w, new_h), Image.BICUBIC)
+    tensor = T.ToTensor()(img)
+    lab = srgb_tensor_to_normalized_lab(tensor)
+    return lab.unsqueeze(0)
 
 def load_image(path, size=512):
     img = Image.open(path).convert('RGB')
@@ -61,11 +84,31 @@ def tensor_to_numpy(tensor):
     img = np.clip(img * 255, 0, 255).astype(np.uint8)
     return img
 
+def clip_lab_output(lab_tensor, l_clip=(0.0, 1.0), ab_clip=(-1.0, 1.0)):
+    """
+    Clip normalized LAB tensor with per-channel ranges.
+    Input: lab_tensor - [B, 3, H, W] or [3, H, W]
+    """
+    if lab_tensor.ndim == 3:
+        lab_tensor = lab_tensor.unsqueeze(0)
+        squeeze = True
+    else:
+        squeeze = False
+    # L channel: [0, 1] → you want [0.1, 0.9]
+    lab_tensor[:, 0] = torch.clamp(lab_tensor[:, 0], min=l_clip[0], max=l_clip[1])
+    # a/b channels: [-1, 1] → usually keep full range, or mild clip
+    lab_tensor[:, 1] = torch.clamp(lab_tensor[:, 1], min=ab_clip[0], max=ab_clip[1])
+    lab_tensor[:, 2] = torch.clamp(lab_tensor[:, 2], min=ab_clip[0], max=ab_clip[1])
+
+    if squeeze:
+        lab_tensor = lab_tensor.squeeze(0)
+    return lab_tensor
+
 def main():
-    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/use_lab_12forlAndAb_andMomentLoss/251114_165757_neural_styler_v1/last.ckpt"
-    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-未调色_8bit.png"
-    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/1107/喜人课间EP01-P1-调色_8bit.png"
-    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-frame0_ours_lab_moment_2.png"
+    ckpt_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main/ckps/use_lab_12forlAndAb_andMomentLoss_again/251117_104141_neural_styler_v1/last.ckpt"
+    content_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/content/frame_000000.png"
+    style_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/demo/bench_mark/style/frame_000000.png"
+    output_path = "/mnt/cfs/shanhai/lihaoran/project/code/color/data/output/c/img/喜人课间EP01-use_lab_12forlAndAb_andMomentLoss_again.png"
 
     # === 配置加载 ===
     project_root = "/mnt/cfs/shanhai/lihaoran/project/code/color/Neural-Preset-main"
@@ -107,30 +150,17 @@ def main():
     )
     net = solver.net.eval().cuda()
 
-    def preprocess_image(path, size=None):
-        img = Image.open(path).convert('RGB')
-        if size is not None:
-            img = img.resize(size[::-1], Image.BICUBIC)
-        tensor = T.ToTensor()(img) 
-        lab = srgb_tensor_to_normalized_lab(tensor)  
-        return lab.unsqueeze(0) 
-
     # Load content and style
-    content_img = preprocess_image(content_path, size=(512, 512))
-    style_img = preprocess_image(style_path, size=(512, 512))
-
-    # Ensure same size
-    if content_img.shape[-2:] != style_img.shape[-2:]:
-        from torchvision.transforms.functional import resize
-        style_img = resize(style_img, list(content_img.shape[-2:]), antialias=True)
+    content_img,orig_size = load_content_as_lab(content_path)
+    style_img = load_style_as_lab(style_path)
 
     img_i = content_img.cuda()
     img_j = style_img.cuda()
-    
-    with torch.no_grad():
-        _, styled_output = net(img_i, img_j)  # styled_output is in LAB space
 
-    # Convert LAB to sRGB for visualization
+    with torch.no_grad():
+        _, styled_output = net(img_i, img_j) 
+        styled_output = clip_lab_output(styled_output, l_clip=(0, 1), ab_clip=(-1.0, 1.0))
+
     rgb_image = lab_tensor_to_srgb_image(styled_output)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

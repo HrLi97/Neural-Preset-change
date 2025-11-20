@@ -95,7 +95,7 @@ class Solver(pl.LightningModule):
         }
     
     # 将l1损失在lab上进行区分 更在乎颜色
-    def _compute_losses(self, z_i, z_j, y_i, y_j, img_i, img_j):
+    def _compute_losses_lab(self, z_i, z_j, y_i, y_j, img_i, img_j):
         """Compute all losses for the model outputs."""
         # 重建损失 - 输出和输入 
         # 连续性损失 - 内容图的一致性
@@ -123,7 +123,7 @@ class Solver(pl.LightningModule):
             'total_loss': total_loss
         }
 
-    def _compute_losses_yuan(self, z_i, z_j, y_i, y_j, img_i, img_j):
+    def _compute_losses(self, z_i, z_j, y_i, y_j, img_i, img_j):
         """Compute all losses for the model outputs."""
         # 重建损失 - 输出和输入 
         # 连续性损失 - 内容图的一致性
